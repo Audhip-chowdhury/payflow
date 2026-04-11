@@ -1,4 +1,4 @@
-"""Atomic transfers + idempotency."""
+"""Atomic transfers + idempotency + fraud rules (Phase 5)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import aiosqlite
 
 from payflow.database import fetch_one
 from payflow.exceptions import AppError
-from payflow.services import idempotency_service
+from payflow.services import fraud_service, idempotency_service, rate_limit_service
 from payflow.utils.currency import paise_to_sim, sim_to_paise
 
 
@@ -37,8 +37,8 @@ async def transfer_funds_atomic(
     reference_id: str | None,
 ) -> dict[str, Any]:
     """
-    Move funds between wallets (no auth — caller must enforce policy).
-    Returns API-style `data` dict for one successful transfer.
+    Move funds between wallets; runs fraud rules (Phase 5).
+    Returns API-style `data` dict for one transfer (status completed or held).
     """
     if amount_paise <= 0:
         raise AppError(
@@ -56,6 +56,8 @@ async def transfer_funds_atomic(
             "Cannot transfer to the same wallet",
             status_code=400,
         )
+
+    rate_limit_service.check_transfer_rate_limit(sender_wallet_id)
 
     sender = await fetch_one(
         conn,
@@ -99,13 +101,52 @@ async def transfer_funds_atomic(
             status_code=422,
         )
 
+    sender_user_id = str(sender["user_id"])
+
+    outcome, rule_id, reason = await fraud_service.evaluate_rules_for_transfer(
+        conn,
+        sender_wallet_id=sender_wallet_id,
+        _sender_user_id=sender_user_id,
+        amount_paise=amount_paise,
+    )
+
     tx_id = str(uuid.uuid4())
     now_row = await fetch_one(conn, "SELECT datetime('now') as t")
     assert now_row is not None
     ts = now_row["t"]
 
+    await conn.execute(
+        """
+        INSERT INTO transactions (
+            id, type, status, sender_wallet_id, receiver_wallet_id,
+            amount, currency, reference_id, reference_type, description, metadata, created_at
+        ) VALUES (?, 'transfer', 'pending', ?, ?, ?, ?, ?, ?, ?, '{}', ?)
+        """,
+        (
+            tx_id,
+            sender_wallet_id,
+            receiver_wallet_id,
+            amount_paise,
+            sender["currency"],
+            reference_id,
+            reference_type,
+            description,
+            ts,
+        ),
+    )
+
+    if outcome == "block":
+        await conn.execute("DELETE FROM transactions WHERE id = ?", (tx_id,))
+        raise AppError(
+            "FRAUD_BLOCKED",
+            reason or "Transfer blocked by fraud policy",
+            status_code=403,
+            details={"rule_id": rule_id} if rule_id else {},
+        )
+
     new_sender = bal - amount_paise
     new_receiver = int(receiver["balance"]) + amount_paise
+    final_status = "held" if outcome == "flag" else "completed"
 
     await conn.execute(
         """
@@ -122,30 +163,27 @@ async def transfer_funds_atomic(
 
     await conn.execute(
         """
-        INSERT INTO transactions (
-            id, type, status, sender_wallet_id, receiver_wallet_id,
-            amount, currency, reference_id, reference_type, description, metadata, created_at
-        ) VALUES (?, 'transfer', 'completed', ?, ?, ?, ?, ?, ?, ?, '{}', ?)
+        UPDATE transactions SET status = ? WHERE id = ?
         """,
-        (
-            tx_id,
-            sender_wallet_id,
-            receiver_wallet_id,
-            amount_paise,
-            sender["currency"],
-            reference_id,
-            reference_type,
-            description,
-            ts,
-        ),
+        (final_status, tx_id),
     )
+
+    if outcome == "flag" and rule_id:
+        await fraud_service.insert_flagged(
+            conn,
+            transaction_id=tx_id,
+            rule_id=rule_id,
+            reason=reason or "Fraud rule matched",
+        )
+
+    rate_limit_service.record_transfer_event(sender_wallet_id)
 
     return {
         "transaction_id": tx_id,
         "sender_wallet_id": sender_wallet_id,
         "receiver_wallet_id": receiver_wallet_id,
         "amount": paise_to_sim(amount_paise),
-        "status": "completed",
+        "status": final_status,
         "created_at": ts,
     }
 
@@ -161,6 +199,7 @@ async def execute_transfer(
     idempotency_key: str | None,
     endpoint: str,
     payload_dict: dict[str, Any],
+    skip_idempotency_read: bool = False,
 ) -> tuple[dict[str, Any], int]:
     try:
         amount_paise = sim_to_paise(amount_str)
@@ -180,7 +219,7 @@ async def execute_transfer(
     sender_wallet_id = _parse_uuid(sender_wallet_id, "sender_wallet_id")
     receiver_wallet_id = _parse_uuid(receiver_wallet_id, "receiver_wallet_id")
 
-    if idempotency_key:
+    if idempotency_key and not skip_idempotency_read:
         key_hash = idempotency_service.compute_key_hash(
             idempotency_key, endpoint, user_id
         )
@@ -219,7 +258,10 @@ async def execute_transfer(
         reference_type="transfer",
         reference_id=None,
     )
+
     body: dict[str, Any] = {"success": True, "data": data}
+    if data.get("status") == "held":
+        body["meta"] = {"warning": "Transfer flagged for review"}
 
     if idempotency_key:
         key_hash = idempotency_service.compute_key_hash(

@@ -41,3 +41,16 @@ async def require_user(
 
 DbDep = Annotated[aiosqlite.Connection, Depends(get_db)]
 UserDep = Annotated[UserPublic, Depends(require_user)]
+
+
+async def require_admin(user: UserDep) -> UserPublic:
+    if user["role"] != "admin":
+        raise AppError(
+            "FORBIDDEN",
+            "Admin access required",
+            status_code=403,
+        )
+    return user
+
+
+AdminDep = Annotated[UserPublic, Depends(require_admin)]

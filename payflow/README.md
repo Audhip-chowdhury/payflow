@@ -1,6 +1,6 @@
 # PayFlow
 
-Internal payment and wallet API: wallets, transfers, transaction history, scheduled/recurring payments, webhooks, expense reports (Phase 3), and vendors/invoices/batches/settlements (Phase 4).
+Internal payment and wallet API: wallets, transfers, transaction history, scheduled/recurring payments, webhooks, expense reports (Phase 3), vendors/invoices/batches/settlements (Phase 4), and fraud rules / audit log / rate limits (Phase 5).
 
 ## Layout (where to add code)
 
@@ -59,6 +59,16 @@ Uses **hot reload** by default (`RELOAD=true` in `.env`). Disable with `RELOAD=f
 - **Workers:** `ENABLE_BATCH_WORKER` / `BATCH_WORKER_INTERVAL_SECONDS` run the invoice batch executor (in addition to `ENABLE_WORKER` for scheduled/recurring payments).
 
 **Intentional spec-matching behaviors (QA):** PF-013 settlement aggregate uses current exchange rate vs per-invoice creation metadata; PF-014 due date from datetime + `timedelta` without date-only normalization; PF-015 soft-deleted vendor + due invoice can crash batch execution (`TypeError`); PF-016 CSV rows are unquoted (commas in vendor names break columns).
+
+### Phase 5 (fraud & audit)
+
+- **Rules (admin):** `POST /api/v1/fraud/rules` — velocity, amount threshold, geo/pattern (stubs), actions `flag` / `block` / `alert`.
+- **Transfers:** evaluated against active rules after validation; `block` → HTTP 403 `FRAUD_BLOCKED`; `flag` → ledger move + transaction `held` + `flagged_transactions` row + optional `meta.warning`; completed transfers fire `payment.executed` webhooks (held does not).
+- **Review (admin):** `GET /api/v1/fraud/flagged`, `POST /api/v1/fraud/flagged/{id}/release` — completes held transaction; **does not** send webhook on release (PF-019).
+- **Audit (admin):** `GET /api/v1/audit-log` — append-only table with SQLite triggers preventing UPDATE/DELETE.
+- **Rate limits (in-process):** per sender wallet for transfers; separate per-user cap on `POST /wallets` (see `.env.example`).
+
+**Intentional spec-matching behaviors (QA):** PF-017 velocity counts `sender_wallet_id` only (multi-wallet bypass); PF-018 transfer audit row committed before the transfer transaction so failures still show `error_message: null`; PF-019 release does not call `notify_user_event`; PF-020 wallet creation uses its own hourly limit (not the per-wallet transfer window).
 
 Or run uvicorn directly:
 

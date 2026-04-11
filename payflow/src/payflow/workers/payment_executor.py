@@ -85,17 +85,18 @@ async def process_scheduled_payment(schedule_id: str) -> None:
             )
             return
 
-    await webhook_service.notify_user_event(
-        uid,
-        "payment.executed",
-        {
-            "transaction_id": data["transaction_id"],
-            "amount": data["amount"],
-            "sender_wallet_id": data["sender_wallet_id"],
-            "receiver_wallet_id": data["receiver_wallet_id"],
-            "scheduled_payment_id": schedule_id,
-        },
-    )
+    if data.get("status") == "completed":
+        await webhook_service.notify_user_event(
+            uid,
+            "payment.executed",
+            {
+                "transaction_id": data["transaction_id"],
+                "amount": data["amount"],
+                "sender_wallet_id": data["sender_wallet_id"],
+                "receiver_wallet_id": data["receiver_wallet_id"],
+                "scheduled_payment_id": schedule_id,
+            },
+        )
 
 
 async def process_recurring_payment(rid: str) -> None:
@@ -184,17 +185,18 @@ async def process_recurring_payment(rid: str) -> None:
             )
             return
 
-    await webhook_service.notify_user_event(
-        uid,
-        "payment.executed",
-        {
-            "transaction_id": data["transaction_id"],
-            "amount": data["amount"],
-            "sender_wallet_id": data["sender_wallet_id"],
-            "receiver_wallet_id": data["receiver_wallet_id"],
-            "recurring_payment_id": rid,
-        },
-    )
+    if data.get("status") == "completed":
+        await webhook_service.notify_user_event(
+            uid,
+            "payment.executed",
+            {
+                "transaction_id": data["transaction_id"],
+                "amount": data["amount"],
+                "sender_wallet_id": data["sender_wallet_id"],
+                "receiver_wallet_id": data["receiver_wallet_id"],
+                "recurring_payment_id": rid,
+            },
+        )
 
 
 async def run_due_payment_tick() -> None:

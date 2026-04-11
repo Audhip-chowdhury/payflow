@@ -94,6 +94,10 @@ async def _execute_batch_core(conn: aiosqlite.Connection) -> dict[str, Any]:
             failed += 1
             continue
 
+        if xfer.get("status") != "completed":
+            failed += 1
+            continue
+
         await conn.execute(
             """
             UPDATE invoices SET

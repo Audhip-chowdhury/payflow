@@ -13,7 +13,9 @@ from payflow.config import get_settings
 from payflow.middleware.error_handler import register_exception_handlers
 from payflow.migrations_runner import run_alembic_upgrade
 from payflow.routers import (
+    audit,
     expense_reports,
+    fraud,
     health,
     invoices,
     me,
@@ -109,6 +111,8 @@ def create_app() -> FastAPI:
     app.include_router(invoices.router)
     app.include_router(payment_batches.router)
     app.include_router(settlements.router)
+    app.include_router(fraud.router)
+    app.include_router(audit.router)
     return app
 
 

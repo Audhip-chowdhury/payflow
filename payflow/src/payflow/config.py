@@ -45,6 +45,20 @@ class Settings(BaseSettings):
         validation_alias="BATCH_WORKER_INTERVAL_SECONDS",
     )
 
+    # Phase 5 — rate limits (in-process; high defaults for dev/tests).
+    rate_limit_transfers_per_wallet_per_minute: int = Field(
+        default=1000,
+        validation_alias="RATE_LIMIT_TRANSFERS_PER_WALLET_PER_MINUTE",
+    )
+    rate_limit_window_minutes: int = Field(
+        default=1,
+        validation_alias="RATE_LIMIT_WINDOW_MINUTES",
+    )
+    rate_limit_wallet_creates_per_user_per_hour: int = Field(
+        default=1000,
+        validation_alias="RATE_LIMIT_WALLET_CREATES_PER_USER_PER_HOUR",
+    )
+
     @property
     def sync_database_url(self) -> str:
         """SQLAlchemy/Alembic sync URL for the same SQLite file as the app."""

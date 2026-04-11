@@ -10,7 +10,7 @@ import aiosqlite
 
 from payflow.database import fetch_all, fetch_one
 from payflow.exceptions import AppError
-from payflow.services import idempotency_service
+from payflow.services import idempotency_service, rate_limit_service
 from payflow.utils.currency import paise_to_sim
 
 
@@ -73,6 +73,8 @@ async def create_wallet(
             status_code=409,
         )
 
+    rate_limit_service.check_wallet_creation_rate_limit(user_id)
+
     wid = str(uuid.uuid4())
     now = await fetch_one(conn, "SELECT datetime('now') as t")
     assert now is not None
@@ -95,6 +97,8 @@ async def create_wallet(
         "updated_at": ts,
     }
     body = {"success": True, "data": data}
+
+    rate_limit_service.record_wallet_created(user_id)
 
     if idempotency_key:
         key_hash = idempotency_service.compute_key_hash(
