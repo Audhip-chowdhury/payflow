@@ -21,6 +21,7 @@ TEST_API_KEY = "pfk_test_secret_key_phase0"
 def _disable_background_worker(monkeypatch: pytest.MonkeyPatch) -> None:
     """APScheduler must not run during pytest (isolated DB + no side effects)."""
     monkeypatch.setenv("ENABLE_WORKER", "false")
+    monkeypatch.setenv("ENABLE_BATCH_WORKER", "false")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

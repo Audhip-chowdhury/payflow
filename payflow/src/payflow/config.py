@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     enable_worker: bool = Field(default=True, validation_alias="ENABLE_WORKER")
     worker_interval_seconds: int = Field(default=60, validation_alias="WORKER_INTERVAL_SECONDS")
 
+    # Company float wallet for expense reimbursements (must exist in DB; see seed).
+    reimbursement_wallet_id: str = Field(
+        default="00000000-0000-4000-8000-0000000000c0",
+        validation_alias="REIMBURSEMENT_WALLET_ID",
+    )
+
+    enable_batch_worker: bool = Field(default=True, validation_alias="ENABLE_BATCH_WORKER")
+    batch_worker_interval_seconds: int = Field(
+        default=120,
+        validation_alias="BATCH_WORKER_INTERVAL_SECONDS",
+    )
+
     @property
     def sync_database_url(self) -> str:
         """SQLAlchemy/Alembic sync URL for the same SQLite file as the app."""

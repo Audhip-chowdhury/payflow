@@ -13,12 +13,17 @@ from payflow.config import get_settings
 from payflow.middleware.error_handler import register_exception_handlers
 from payflow.migrations_runner import run_alembic_upgrade
 from payflow.routers import (
+    expense_reports,
     health,
+    invoices,
     me,
+    payment_batches,
     recurring_payments,
     scheduled_payments,
+    settlements,
     transactions,
     transfers,
+    vendors,
     wallets,
     webhooks,
 )
@@ -33,25 +38,41 @@ async def lifespan(_app: FastAPI):
     logger.info("Migrations complete.")
 
     scheduler = None
-    if settings.enable_worker:
+    if settings.enable_worker or settings.enable_batch_worker:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-        from payflow.workers.payment_executor import run_due_payment_tick
-
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(
-            run_due_payment_tick,
-            "interval",
-            seconds=max(1, settings.worker_interval_seconds),
-            id="payment_executor",
-            max_instances=1,
-            coalesce=True,
-        )
+        if settings.enable_worker:
+            from payflow.workers.payment_executor import run_due_payment_tick
+
+            scheduler.add_job(
+                run_due_payment_tick,
+                "interval",
+                seconds=max(1, settings.worker_interval_seconds),
+                id="payment_executor",
+                max_instances=1,
+                coalesce=True,
+            )
+            logger.info(
+                "Payment executor: every {}s (ENABLE_WORKER=true)",
+                settings.worker_interval_seconds,
+            )
+        if settings.enable_batch_worker:
+            from payflow.workers.batch_executor import run_due_invoice_batch_tick
+
+            scheduler.add_job(
+                run_due_invoice_batch_tick,
+                "interval",
+                seconds=max(1, settings.batch_worker_interval_seconds),
+                id="invoice_batch_executor",
+                max_instances=1,
+                coalesce=True,
+            )
+            logger.info(
+                "Invoice batch executor: every {}s (ENABLE_BATCH_WORKER=true)",
+                settings.batch_worker_interval_seconds,
+            )
         scheduler.start()
-        logger.info(
-            "Payment executor: every {}s (ENABLE_WORKER=true)",
-            settings.worker_interval_seconds,
-        )
 
     yield
 
@@ -83,6 +104,11 @@ def create_app() -> FastAPI:
     app.include_router(scheduled_payments.router)
     app.include_router(recurring_payments.router)
     app.include_router(webhooks.router)
+    app.include_router(expense_reports.router)
+    app.include_router(vendors.router)
+    app.include_router(invoices.router)
+    app.include_router(payment_batches.router)
+    app.include_router(settlements.router)
     return app
 
 

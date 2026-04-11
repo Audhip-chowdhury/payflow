@@ -1,6 +1,6 @@
 # PayFlow
 
-Internal payment and wallet API: wallets, transfers, transaction history, scheduled and recurring payments, and webhooks (Phase 2).
+Internal payment and wallet API: wallets, transfers, transaction history, scheduled/recurring payments, webhooks, expense reports (Phase 3), and vendors/invoices/batches/settlements (Phase 4).
 
 ## Layout (where to add code)
 
@@ -38,7 +38,27 @@ Uses **hot reload** by default (`RELOAD=true` in `.env`). Disable with `RELOAD=f
 
 - Scheduled: `POST/GET/PATCH /api/v1/scheduled-payments` — one-shot future-dated transfers.
 - Recurring: `POST/GET /api/v1/recurring-payments` — daily / weekly / monthly schedules.
-- Webhooks: `POST/GET/DELETE /api/v1/webhooks` — subscribe URLs for payment events (HMAC-signed payloads).
+- Webhooks: `POST /api/v1/webhooks` — subscribe URLs for payment events (HMAC-signed payloads).
+
+### Phase 3 (expense reports)
+
+- Categories: `GET /api/v1/expense-categories` — policy limits for line items (seeded with `python -m payflow.seed`).
+- Reports: `POST /api/v1/expense-reports`, `POST .../{id}/submit`, `POST .../{id}/approve`, `POST .../{id}/reject`, `POST /api/v1/expense-reports/bulk-action`, `GET /api/v1/expense-reports`, `GET .../{id}`.
+- Reimbursements debit **`REIMBURSEMENT_WALLET_ID`** (default matches the seeded company float wallet) and credit the submitter’s SIM wallet when a report is fully approved.
+
+**Intentional spec-matching behaviors (QA):** PF-009 self-approval allowed for managers; PF-010 bulk action always HTTP 200 with per-id results; PF-011 multi-level threshold uses strict `>` (not `>=`); PF-012 `receipt_url` is not validated as a URL.
+
+**Smoke (all Phase 3 routes, prints JSON to the console):** after seed, run `python scripts/smoke_phase3.py` from the `payflow` directory (requires `pip install -e ".[dev]"`). Optional env: `SMOKE_CHARLIE_KEY`, `SMOKE_BOB_KEY` to override DB lookups.
+
+### Phase 4 (vendors & invoices)
+
+- **Vendors:** `POST /api/v1/vendors` (admin), `DELETE /api/v1/vendors/{id}` (soft-delete), `GET /api/v1/vendors` — creates a vendor user + SIM wallet per vendor.
+- **Invoices:** `POST /api/v1/invoices`, `POST /api/v1/invoices/{id}/approve`, `GET /api/v1/invoices` — approve before batch pay.
+- **Batch:** `POST /api/v1/payment-batches/execute` — pays approved invoices whose `due_date` is on or before today.
+- **Settlements:** `GET /api/v1/settlements` — query `date_from`, `date_to`, `vendor_id`, `format=json|csv`.
+- **Workers:** `ENABLE_BATCH_WORKER` / `BATCH_WORKER_INTERVAL_SECONDS` run the invoice batch executor (in addition to `ENABLE_WORKER` for scheduled/recurring payments).
+
+**Intentional spec-matching behaviors (QA):** PF-013 settlement aggregate uses current exchange rate vs per-invoice creation metadata; PF-014 due date from datetime + `timedelta` without date-only normalization; PF-015 soft-deleted vendor + due invoice can crash batch execution (`TypeError`); PF-016 CSV rows are unquoted (commas in vendor names break columns).
 
 Or run uvicorn directly:
 
@@ -60,7 +80,7 @@ pytest tests -v
 python -m payflow.seed
 ```
 
-Prints generated `api_key` lines for each new user (skipped if username already exists).
+Prints generated `api_key` lines for each new user (skipped if username already exists). Also ensures a **company float** wallet and **expense categories** when missing.
 
 ## Migrations (Alembic)
 

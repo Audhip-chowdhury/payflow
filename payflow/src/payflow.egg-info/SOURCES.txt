@@ -16,6 +16,7 @@ src/payflow.egg-info/top_level.txt
 src/payflow/middleware/__init__.py
 src/payflow/middleware/error_handler.py
 src/payflow/routers/__init__.py
+src/payflow/routers/expense_reports.py
 src/payflow/routers/health.py
 src/payflow/routers/me.py
 src/payflow/routers/recurring_payments.py
@@ -26,6 +27,7 @@ src/payflow/routers/wallets.py
 src/payflow/routers/webhooks.py
 src/payflow/schemas/__init__.py
 src/payflow/schemas/common.py
+src/payflow/schemas/expense_report.py
 src/payflow/schemas/recurring_payment.py
 src/payflow/schemas/scheduled_payment.py
 src/payflow/schemas/transaction.py
@@ -34,6 +36,7 @@ src/payflow/schemas/user.py
 src/payflow/schemas/wallet.py
 src/payflow/schemas/webhook.py
 src/payflow/services/__init__.py
+src/payflow/services/expense_report_service.py
 src/payflow/services/idempotency_service.py
 src/payflow/services/recurring_payment_service.py
 src/payflow/services/scheduled_payment_service.py
@@ -58,6 +61,7 @@ tests/test_hmac.py
 tests/test_migrations.py
 tests/test_pagination.py
 tests/test_phase2.py
+tests/test_phase3.py
 tests/test_scheduler_service.py
 tests/test_transactions_list.py
 tests/test_transfers.py
