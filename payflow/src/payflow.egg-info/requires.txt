@@ -5,6 +5,7 @@ pydantic-settings>=2.6.0
 loguru>=0.7.0
 sqlalchemy>=2.0.0
 alembic>=1.14.0
+apscheduler>=3.10.0
 
 [dev]
 pytest>=8.0.0

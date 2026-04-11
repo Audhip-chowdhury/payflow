@@ -1,6 +1,6 @@
 # PayFlow
 
-Internal payment and wallet API (Phase 1: wallets, transfers, transaction history).
+Internal payment and wallet API: wallets, transfers, transaction history, scheduled and recurring payments, and webhooks (Phase 2).
 
 ## Layout (where to add code)
 
@@ -31,6 +31,14 @@ python -m payflow.main
 ```
 
 Uses **hot reload** by default (`RELOAD=true` in `.env`). Disable with `RELOAD=false`.
+
+**Phase 2 worker:** when `ENABLE_WORKER=true` (default), the app runs a background job on `WORKER_INTERVAL_SECONDS` (default `60`) that executes due scheduled and recurring payments and delivers webhook notifications. Set `ENABLE_WORKER=false` if you only want HTTP-triggered behavior.
+
+### Phase 2 HTTP (summary)
+
+- Scheduled: `POST/GET/PATCH /api/v1/scheduled-payments` — one-shot future-dated transfers.
+- Recurring: `POST/GET /api/v1/recurring-payments` — daily / weekly / monthly schedules.
+- Webhooks: `POST/GET/DELETE /api/v1/webhooks` — subscribe URLs for payment events (HMAC-signed payloads).
 
 Or run uvicorn directly:
 

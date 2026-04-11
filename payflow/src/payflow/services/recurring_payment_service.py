@@ -10,7 +10,7 @@ import aiosqlite
 from payflow.database import fetch_all, fetch_one
 from payflow.exceptions import AppError
 from payflow.services import scheduler_service
-from payflow.utils.currency import paise_to_sim
+from payflow.utils.currency import paise_to_sim, sim_to_paise
 from payflow.utils.pagination import build_meta, offset_for_page
 
 
